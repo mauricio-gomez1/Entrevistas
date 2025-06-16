@@ -6,50 +6,50 @@ class InterviewBot:
         # Common interview questions by category
         self.question_templates = {
             'behavioral': [
-                "Tell me about a time when you {scenario}.",
-                "Describe a situation where you had to {scenario}.",
-                "Give me an example of when you {scenario}.",
-                "Share a specific instance where you {scenario}."
+                "Cuéntame sobre una ocasión en la que {scenario}.",
+                "Describe una situación donde tuviste que {scenario}.",
+                "Dame un ejemplo de cuando {scenario}.",
+                "Comparte un caso específico en el que {scenario}."
             ],
             'technical': [
-                "How would you approach {scenario}?",
-                "Explain your experience with {scenario}.",
-                "What's your understanding of {scenario}?",
-                "How do you handle {scenario}?"
+                "¿Cómo abordarías {scenario}?",
+                "Explica tu experiencia con {scenario}.",
+                "¿Cuál es tu comprensión sobre {scenario}?",
+                "¿Cómo manejas {scenario}?"
             ],
             'situational': [
-                "What would you do if {scenario}?",
-                "How would you handle a situation where {scenario}?",
-                "If you were faced with {scenario}, what would be your approach?",
-                "Imagine you're in a situation where {scenario}. How would you respond?"
+                "¿Qué harías si {scenario}?",
+                "¿Cómo manejarías una situación donde {scenario}?",
+                "Si te enfrentas a {scenario}, ¿cuál sería tu enfoque?",
+                "Imagina que estás en una situación donde {scenario}. ¿Cómo responderías?"
             ]
         }
         
         # Common scenarios based on skills
         self.skill_scenarios = {
             'leadership': [
-                "led a team through a challenging project",
-                "had to make a difficult decision that affected your team",
-                "had to motivate team members during a difficult time",
-                "had to resolve a conflict between team members"
+                "lideraste un equipo durante un proyecto desafiante",
+                "tuviste que tomar una decisión difícil que afectó a tu equipo",
+                "motivaste a miembros del equipo en un momento complicado",
+                "resolviste un conflicto entre miembros del equipo"
             ],
             'problem_solving': [
-                "faced a complex technical problem",
-                "had to debug a critical issue under pressure",
-                "had to optimize a slow-performing system",
-                "had to find a creative solution to a challenging problem"
+                "enfrentaste un problema técnico complejo",
+                "tuviste que depurar un error crítico bajo presión",
+                "optimizaste un sistema de bajo rendimiento",
+                "encontraste una solución creativa a un problema desafiante"
             ],
             'communication': [
-                "had to explain a complex technical concept to non-technical stakeholders",
-                "had to present your work to senior management",
-                "had to write technical documentation",
-                "had to collaborate with different teams"
+                "explicaste un concepto técnico complejo a personas no técnicas",
+                "presentaste tu trabajo a la alta dirección",
+                "escribiste documentación técnica",
+                "colaboraste con diferentes equipos"
             ],
             'technical': [
-                "worked with a new technology or framework",
-                "had to learn a new programming language quickly",
-                "had to design a scalable system",
-                "had to implement a complex feature"
+                "trabajaste con una nueva tecnología o framework",
+                "tuviste que aprender un nuevo lenguaje de programación rápidamente",
+                "diseñaste un sistema escalable",
+                "implementaste una funcionalidad compleja"
             ]
         }
 
@@ -150,3 +150,6 @@ class InterviewBot:
                 'relevance': 'high' if len(mentioned_skills) > 0 else 'low'
             }
         } 
+
+
+        

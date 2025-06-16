@@ -10,8 +10,8 @@ class ResumeParser:
             self.nlp = spacy.load("en_core_web_sm")
         except OSError:
             print("Downloading spaCy model...")
-            os.system("python -m spacy download en_core_web_sm")
-            self.nlp = spacy.load("en_core_web_sm")
+            os.system("python -m spacy download es_core_news_sm")
+            self.nlp = spacy.load("es_core_news_sm")
 
     def extract_resume_text(self, pdf_path: str) -> Optional[str]:
         """

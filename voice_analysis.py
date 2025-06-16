@@ -52,9 +52,14 @@ class VoiceAnalyzer:
 
     def _extract_tempo(self, y: np.ndarray, sr: int) -> float:
         """Extract tempo (BPM)."""
-        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-        tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
-        return float(tempo[0])
+        try:
+            onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+            # Use the updated API for librosa >= 0.10.0
+            tempo = librosa.feature.rhythm.tempo(onset_envelope=onset_env, sr=sr)
+            return float(tempo[0]) if len(tempo) > 0 else 120.0
+        except Exception:
+            # Fallback to default tempo if extraction fails
+            return 120.0
 
     def analyze_voice_characteristics(self, features: Dict) -> Dict:
         """

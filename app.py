@@ -1,7 +1,16 @@
 import streamlit as st
 import os
 from resume_parser import ResumeParser
-from facial_emotion import FacialEmotionAnalyzer
+
+# Try to import optional modules
+try:
+    from facial_emotion import FacialEmotionAnalyzer
+    FACIAL_EMOTION_AVAILABLE = True
+except Exception as e:
+    st.warning(f"Analsis facial no disponible: {str(e)}")
+    FACIAL_EMOTION_AVAILABLE = False
+    FacialEmotionAnalyzer = None
+
 from voice_analysis import VoiceAnalyzer
 from speech_to_text import SpeechToText
 from content_matcher import ContentMatcher
@@ -19,7 +28,7 @@ from datetime import datetime
 
 # Initialize components
 resume_parser = ResumeParser()
-facial_analyzer = FacialEmotionAnalyzer()
+facial_analyzer = FacialEmotionAnalyzer() if FACIAL_EMOTION_AVAILABLE else None
 voice_analyzer = VoiceAnalyzer()
 speech_to_text = SpeechToText()
 content_matcher = ContentMatcher()
@@ -44,10 +53,20 @@ def save_uploaded_file(uploaded_file):
 def process_frame(frame, emotion_queue):
     """Process a single frame for emotion analysis."""
     try:
-        analysis = facial_analyzer.analyze_frame(frame)
-        emotion_queue.put(analysis)
+        if facial_analyzer:
+            analysis = facial_analyzer.analyze_frame(frame)
+            # Ensure the analysis has the required keys
+            if 'dominant_emotion' not in analysis:
+                analysis['dominant_emotion'] = 'neutral'
+            if 'emotions' not in analysis:
+                analysis['emotions'] = {}
+            emotion_queue.put(analysis)
+        else:
+            emotion_queue.put({'dominant_emotion': 'unavailable', 'emotions': {}})
     except Exception as e:
         print(f"Error processing frame: {str(e)}")
+        # Put a default emotion result even when there's an error
+        emotion_queue.put({'dominant_emotion': 'error', 'emotions': {}})
 
 def record_audio(duration, sample_rate=44100):
     """Record audio for a specified duration."""
@@ -57,25 +76,79 @@ def record_audio(duration, sample_rate=44100):
 
 def save_audio(recording, sample_rate=44100):
     """Save recorded audio to a temporary WAV file."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
-        with wave.open(tmp_file.name, 'wb') as wf:
+    try:
+        # Create a temporary file with explicit close to avoid Windows file locking
+        import uuid
+        temp_filename = f"temp_audio_{uuid.uuid4().hex[:8]}.wav"
+        temp_path = os.path.join(tempfile.gettempdir(), temp_filename)
+        
+        # Ensure recording is not empty and has valid data
+        if len(recording) == 0:
+            print("Warning: Empty recording")
+            return None
+            
+        # Normalize audio data
+        audio_data = np.array(recording).flatten()
+        audio_data = np.clip(audio_data * 32767, -32768, 32767).astype(np.int16)
+        
+        # Save with explicit file handling
+        with wave.open(temp_path, 'wb') as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
             wf.setframerate(sample_rate)
-            wf.writeframes((recording * 32767).astype(np.int16).tobytes())
-        return tmp_file.name
+            wf.writeframes(audio_data.tobytes())
+        
+        # Verify file was created
+        if os.path.exists(temp_path) and os.path.getsize(temp_path) > 44:  # More than just header
+            return temp_path
+        else:
+            print(f"Error: Audio file not created properly: {temp_path}")
+            return None
+            
+    except Exception as e:
+        print(f"Error saving audio: {str(e)}")
+        return None
 
 def analyze_response(audio_path, video_frames, question, skills):
     """Analyze the user's response comprehensively."""
-    # Transcribe speech
-    transcription = speech_to_text.transcribe(audio_path)
+    # Initialize default results
+    transcription = {'text': '', 'segments': [], 'language': 'es'}
+    voice_analysis = {}
     
-    # Analyze voice characteristics
-    voice_features = voice_analyzer.extract_features(audio_path)
-    voice_analysis = voice_analyzer.analyze_voice_characteristics(voice_features)
+    # Check if audio file exists and is valid
+    if audio_path and os.path.exists(audio_path):
+        try:
+            # Transcribe speech
+            transcription = speech_to_text.transcribe(audio_path)
+            
+            # Analyze voice characteristics
+            voice_features = voice_analyzer.extract_features(audio_path)
+            voice_analysis = voice_analyzer.analyze_voice_characteristics(voice_features)
+        except Exception as e:
+            print(f"Error in audio analysis: {str(e)}")
+            transcription = {'text': 'Error processing audio', 'segments': [], 'language': 'en'}
+            voice_analysis = {'error': 'Audio analysis failed'}
+    else:
+        print(f"Audio file not available: {audio_path}")
+        transcription = {'text': 'Audio recording failed', 'segments': [], 'language': 'en'}
+        voice_analysis = {'error': 'No audio file'}
     
     # Analyze facial emotions
-    emotion_analysis = facial_analyzer.analyze_frames(video_frames)
+    if facial_analyzer and video_frames:
+        try:
+            emotion_analysis = facial_analyzer.analyze_frames(video_frames)
+            # Ensure the analysis has the required keys
+            if not isinstance(emotion_analysis, dict):
+                emotion_analysis = {'dominant_emotion': 'error', 'emotions': {}}
+            if 'dominant_emotion' not in emotion_analysis:
+                emotion_analysis['dominant_emotion'] = 'neutral'
+            if 'emotions' not in emotion_analysis:
+                emotion_analysis['emotions'] = {}
+        except Exception as e:
+            print(f"Error in emotion analysis: {str(e)}")
+            emotion_analysis = {'dominant_emotion': 'error', 'emotions': {}}
+    else:
+        emotion_analysis = {'dominant_emotion': 'unavailable', 'emotions': {}}
     
     # Match content with resume
     content_analysis = content_matcher.analyze_content_match(skills, transcription['text'])
@@ -93,28 +166,28 @@ def analyze_response(audio_path, video_frames, question, skills):
     }
 
 def main():
-    st.title("Live Interview Analysis System")
+    st.title("Sistema de analisis de entrevistas")
     
     # Sidebar for resume upload
-    st.sidebar.header("Upload Resume")
-    resume_file = st.sidebar.file_uploader("Upload Resume (PDF)", type=['pdf'])
+    st.sidebar.header("Subir CV")
+    resume_file = st.sidebar.file_uploader("Subir(PDF)", type=['pdf'])
     
     if resume_file:
         # Process resume
-        with st.spinner("Analyzing resume..."):
+        with st.spinner("Analizando CV..."):
             resume_path = save_uploaded_file(resume_file)
             resume_analysis = resume_parser.analyze_resume(resume_path)
             if resume_analysis:
                 st.session_state.skills = resume_analysis['skills']
-                st.success("Resume analysis complete!")
+                st.success("Analisis de CV completado!")
                 st.sidebar.write("Extracted Skills:", resume_analysis['skills'])
                 os.unlink(resume_path)
             else:
-                st.error("Failed to analyze resume. Please check the file format.")
+                st.error("Error al analizar CV. Revisar formato.")
                 return
     
     # Main interview interface
-    st.header("Live Interview")
+    st.header("Entrevista en vivo")
     
     # Generate new question if none exists
     if not st.session_state.current_question and st.session_state.skills:
@@ -125,11 +198,11 @@ def main():
     
     # Display current question
     if st.session_state.current_question:
-        st.write("### Current Question")
+        st.write("### Pregunta actual")
         st.write(st.session_state.current_question['question'])
         
         # Start/Stop recording button
-        if st.button("Start Recording"):
+        if st.button("Comenzar grabacion"):
             st.session_state.is_recording = True
             
             # Create placeholders for live feedback
@@ -157,7 +230,9 @@ def main():
                     # Display live emotion analysis
                     if not emotion_queue.empty():
                         emotion = emotion_queue.get()
-                        emotion_placeholder.write(f"Current Emotion: {emotion['dominant_emotion']}")
+                        # Safely access dominant_emotion with a fallback
+                        dominant_emotion = emotion.get('dominant_emotion', 'unknown')
+                        emotion_placeholder.write(f"Emocion Actual: {dominant_emotion}")
             
             cap.release()
             
@@ -166,7 +241,7 @@ def main():
             audio_path = save_audio(audio_data)
             
             # Analyze response
-            with st.spinner("Analyzing your response..."):
+            with st.spinner("Analizando tu respuesta..."):
                 analysis = analyze_response(
                     audio_path,
                     video_frames,
@@ -177,20 +252,23 @@ def main():
                 st.session_state.analysis_results.append(analysis)
                 
                 # Display analysis results
-                st.write("### Analysis Results")
-                st.write("#### Speech Transcription")
-                st.write(analysis['transcription'])
+                st.write("### Resultado del analisis")
+
+                st.write("#### Transcripcion")
+                print(f"🟡 Texto transcrito: '{analysis['transcription']}'")
+                if not analysis['transcription'].strip():
+                    st.warning("⚠️ No se obtuvo ninguna transcripción del audio.")
                 
-                st.write("#### Voice Analysis")
+                st.write("#### Analisis de voz")
                 st.write(analysis['voice_analysis'])
                 
-                st.write("#### Emotion Analysis")
+                st.write("#### Analisis de emociones")
                 st.write(analysis['emotion_analysis'])
                 
-                st.write("#### Content Matching")
+                st.write("#### Contenido similar")
                 st.write(analysis['content_analysis'])
                 
-                st.write("#### Answer Evaluation")
+                st.write("#### Evaluacion de la respuesta")
                 st.write(analysis['answer_evaluation'])
             
             # Clean up
@@ -205,12 +283,12 @@ def main():
     
     # Display interview history
     if st.session_state.analysis_results:
-        st.header("Interview History")
+        st.header("Historial de entrevista")
         for i, result in enumerate(st.session_state.analysis_results):
             with st.expander(f"Response {i+1}"):
-                st.write("Question:", st.session_state.current_question['question'])
-                st.write("Transcription:", result['transcription'])
-                st.write("Evaluation:", result['answer_evaluation'])
+                st.write("Pregunta:", st.session_state.current_question['question'])
+                st.write("Transcripcion:", result['transcription'])
+                st.write("Evaluaacion:", result['answer_evaluation'])
 
 if __name__ == "__main__":
     main() 

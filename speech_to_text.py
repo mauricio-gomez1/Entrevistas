@@ -1,4 +1,4 @@
-import whisper
+from faster_whisper import WhisperModel
 import os
 from typing import Dict, Optional
 
@@ -9,7 +9,14 @@ class SpeechToText:
         Args:
             model_size: Size of the Whisper model ("tiny", "base", "small", "medium", "large")
         """
-        self.model = whisper.load_model(model_size)
+        try:
+            # Use faster-whisper for better performance and compatibility
+            self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
+            self.model_available = True
+        except Exception as e:
+            print(f"Error loading Whisper model: {str(e)}")
+            self.model = None
+            self.model_available = False
 
     def transcribe(self, audio_path: str) -> Dict:
         """
@@ -19,17 +26,43 @@ class SpeechToText:
         Returns:
             Dictionary containing transcription results
         """
+        if not self.model_available:
+            print("Speech-to-text model not available")
+            return {
+                'text': '',
+                'segments': [],
+                'language': 'es'
+            }
+            
         if not os.path.exists(audio_path):
-            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            print(f"Audio file not found: {audio_path}")
+            return {
+                'text': '',
+                'segments': [],
+                'language': 'es'
+            }
 
         try:
-            # Transcribe audio
-            result = self.model.transcribe(audio_path)
+            # Transcribe audio using faster-whisper
+            segments, info = self.model.transcribe(audio_path, beam_size=5)
+            
+            # Convert segments to list and extract text
+            segments_list = []
+            full_text = ""
+            
+            for segment in segments:
+                segment_dict = {
+                    'start': segment.start,
+                    'end': segment.end,
+                    'text': segment.text
+                }
+                segments_list.append(segment_dict)
+                full_text += segment.text
             
             return {
-                'text': result['text'],
-                'segments': result['segments'],
-                'language': result.get('language', 'en')
+                'text': full_text.strip(),
+                'segments': segments_list,
+                'language': info.language
             }
             
         except Exception as e:
@@ -37,7 +70,7 @@ class SpeechToText:
             return {
                 'text': '',
                 'segments': [],
-                'language': 'en'
+                'language': 'es'
             }
 
     def get_word_timestamps(self, segments: list) -> list:
